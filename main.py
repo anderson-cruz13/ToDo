@@ -1,7 +1,8 @@
-import flet as ft 
+import flet as ft
 import sqlite3
+import datetime
 
-# Classe principal
+# Classe principal do aplicativo To-Do.
 class ToDo:
     def __init__(self, page: ft.Page):
         # Configurações iniciais da página.
@@ -14,7 +15,6 @@ class ToDo:
         self.page.title = 'ToDo App'
         self.task = ''
         self.view = 'all'
-        self.page.scroll = ft.ScrollMode.HIDDEN
 
         # Inicialização do banco de dados SQLite e recuperação das tarefas.
         self.db_execute("CREATE TABLE IF NOT EXISTS tasks(name, status)")
@@ -22,18 +22,31 @@ class ToDo:
 
         # Configuração da página principal.
         self.main_page()
-    
 
     # Função para executar consultas no banco de dados.
-    def db_execute(self, query, params=[]):
-        with sqlite3.connect('database.db') as con:
+    def db_execute(self, query, params = []):
+        with sqlite3.connect("database.db") as con:
             cur = con.cursor()
-            cur.execute(query, params)  
-            con.commit()   
-            return cur.fetchall()   
+            cur.execute(query, params)
+            con.commit()
+            return cur.fetchall()
 
+    # Função para definir o valor da tarefa.
+    def set_value(self, e):
+        self.task = e.control.value
 
-    # Marcar checkBox ou não.
+    # Função para adicionar uma nova tarefa.
+    def add(self, e, input_task):
+        name = self.task
+        status = 'incomplete'
+
+        if name:
+            self.db_execute(query='INSERT INTO tasks VALUES(?, ?)', params=[name, status])
+            input_task.value = ''
+            self.results = self.db_execute('SELECT * FROM tasks')
+            self.update_task_list()
+
+    # Função chamada quando uma tarefa é marcada como concluída ou não.
     def checked(self, e):
         is_checked = e.control.value
         label = e.control.label
@@ -46,55 +59,40 @@ class ToDo:
         if self.view == 'all':
             self.results = self.db_execute('SELECT * FROM tasks')
         else:
-            self.results == self.db_execute('SELECT * from tasks WHERE satatus = ?', params=[self.view])
-
+            self.results = self.db_execute('SELECT * FROM tasks WHERE status = ?', params=[self.view])
+        
         self.update_task_list()
 
-
-    # Container de tarefas.
+    # Função para criar o contêiner de tarefas.
     def tasks_container(self):
         return ft.Container(
             height=self.page.height * 0.8,
-            expand=True,
-            content= ft.Column(
-                controls = [
+            content=ft.Column(
+                controls=[
                     ft.Checkbox(
                         label=res[0], 
-                        on_change = self.checked,
-                        value=True if res[1] == 'complete' else False) for res in self.results if res
-                ]
+                        label_style=ft.TextStyle(
+                            color=ft.colors.BLACK,
+                        ),
+                        overlay_color = ft.colors.YELLOW_100,
+                        check_color = ft.colors.BLUE_900,
+                        active_color = ft.colors.BLUE_900,
+                        fill_color=ft.colors.BLUE_100,
+                        on_change=self.checked,
+                        value=True if res[1] == 'complete' else False
+                    ) for res in self.results if res],
+                scroll=ft.ScrollMode.ALWAYS
             )
         )
 
-
-    # Define o valor da tarefa.
-    def set_value(self, e):
-        self.task = e.control.value
-
-
-    # Adiciona uma nova tarefa.
-    def add(self, e, input_task):
-        name = self.task
-        status = 'incomplete'
-
-        if name:
-            self.db_execute(query='INSERT INTO tasks VALUES(?, ?)', params=[name, status])
-            input_task.value = ""
-            self.results = self.db_execute('SELECT * FROM tasks')
-            self.update_task_list()
-
-        self.page.update()
-    
-
-    # Atualiza a lista de tarefas exibida.
+    # Função para atualizar a lista de tarefas exibida.
     def update_task_list(self):
         tasks = self.tasks_container()
         self.page.controls.pop()
         self.page.add(tasks)
         self.page.update()
 
-
-    # Mudança das tabs na aplicaçãp.
+    # Função chamada quando as abas de visualização são alteradas.
     def tabs_changed(self, e):
         if e.control.selected_index == 0:
             self.results = self.db_execute('SELECT * FROM tasks')
@@ -102,27 +100,50 @@ class ToDo:
         elif e.control.selected_index == 1:
             self.results = self.db_execute('SELECT * FROM tasks WHERE status = "incomplete"')
             self.view = 'incomplete'
-        else:
+        elif e.control.selected_index == 2:
             self.results = self.db_execute('SELECT * FROM tasks WHERE status = "complete"')
-            self.view = 'complete'    
+            self.view = 'complete'
 
         self.update_task_list()
-
-
+        
     # Função para criar a página principal do aplicativo.
     def main_page(self):
-        input_task = ft.TextField(hint_text="Digite aqui uma tarefa", hint_style=ft.TextStyle(color=ft.colors.BLACK, size=12), expand=True, on_change=self.set_value)
+        input_task = ft.TextField(
+            hint_text="Digite aqui uma tarefa",
+            hint_style=ft.TextStyle(
+                color=ft.colors.BLACK,
+                size=12
+            ),
+            color=ft.colors.BLACK,
+            label_style=ft.TextStyle(
+                size=12,
+            ),
+            border_color=ft.colors.BLACK,
+            focused_border_color=ft.colors.BLUE_900,
+            border=ft.InputBorder.UNDERLINE,
+            capitalization=ft.TextCapitalization.WORDS,
+            expand=True, 
+            on_change=self.set_value,
+            on_submit=lambda e: self.add(e, input_task)
+        )
 
         input_bar = ft.Row(
             controls=[
                 input_task,
-                ft.FloatingActionButton(icon=ft.icons.ADD, on_click=lambda e: self.add(e, input_task))
+                ft.FloatingActionButton(
+                    icon=ft.icons.ADD, 
+                    on_click=lambda e: self.add(e, input_task))
             ]
         )
 
         tabs = ft.Tabs(
             selected_index=0,
             on_change=self.tabs_changed,
+            animation_duration=1000,
+            label_color=ft.colors.BLUE_900,
+            unselected_label_color=ft.colors.BLUE_100,
+            indicator_color=ft.colors.BLUE_900,
+            overlay_color=ft.colors.YELLOW_100,
             tabs=[
                 ft.Tab(text="Todos"), 
                 ft.Tab(text="Em andamento"), 
@@ -134,4 +155,5 @@ class ToDo:
         
         self.page.add(input_bar, tabs, tasks)
 
-ft.app(target=ToDo)
+# Inicialização da aplicação.
+ft.app(target = ToDo)
